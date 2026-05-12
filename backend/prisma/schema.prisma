@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ProductCollection {
+  MATCHA
+  TOOLS
+}
+
+enum CurrencyCode {
+  USD
+  THB
+}
+
+enum LineItemType {
+  PRODUCT
+  KIT
+}
+
+enum OrderStatus {
+  PLACED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  PROMPTPAY_QR
+  LEGACY_CHECKOUT
+}
+
+enum PaymentStatus {
+  PENDING
+  UPLOADED
+  UNDER_REVIEW
+  PAID
+  REFUNDED
+}
+
+enum ShippingStatus {
+  PENDING
+  PREPARING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderHistoryEventType {
+  CHECKOUT_SUBMITTED
+  PAYMENT_STATUS_CHANGED
+  SHIPPING_STATUS_CHANGED
+  ORDER_CANCELLED
+  TRACKING_UPDATED
+  INVENTORY_ADJUSTED
+}
+
+model User {
+  id                  Int                  @id @default(autoincrement())
+  displayName         String               @map("display_name")
+  displayNameKey      String               @unique @map("display_name_key")
+  email               String               @unique
+  passwordHash        String               @map("password_hash")
+  isActive            Boolean              @default(true) @map("is_active")
+  isAdmin             Boolean              @default(false) @map("is_admin")
+  lastLoginAt         DateTime?            @map("last_login_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  cart                Cart?
+  orders              Order[]
+  reviews             CustomerReview[]
+  paymentRecords      OrderPayment[]       @relation("SubmittedOrderPayments")
+  orderHistoryEntries OrderStatusHistory[] @relation("OrderStatusHistoryActor")
+
+  @@map("users")
+}
+
+model Product {
+  id                  Int               @id @default(autoincrement())
+  slug                String            @unique
+  collection          ProductCollection
+  name                String
+  displayName         String            @map("display_name")
+  originLabel         String?           @map("origin_label")
+  originKey           String?           @map("origin_key")
+  sizeKey             String?           @map("size_key")
+  subscriptionEnabled Boolean           @default(false) @map("subscription_enabled")
+  cultivarKey         String?           @map("cultivar_key")
+  offeringKey         String?           @map("offering_key")
+  priceAmount         Int               @map("price_amount")
+  priceCurrency       CurrencyCode      @map("price_currency")
+  badgeLabel          String?           @map("badge_label")
+  soldOut             Boolean           @default(false) @map("sold_out")
+  imagePath           String            @map("image_path")
+  kitItemDescription  String?           @map("kit_item_description")
+  featuredOnHome      Boolean           @default(false) @map("featured_on_home")
+  featuredInKit       Boolean           @default(false) @map("featured_in_kit")
+  includedInKit       Boolean           @default(false) @map("included_in_kit")
+  sortOrder           Int               @default(0) @map("sort_order")
+  trackInventory      Boolean           @default(true) @map("track_inventory")
+  stockQuantity       Int               @default(0) @map("stock_quantity")
+  lowStockThreshold   Int               @default(5) @map("low_stock_threshold")
+  allowBackorder      Boolean           @default(false) @map("allow_backorder")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  cartItems           CartItem[]
+  orderItems          OrderItem[]
+
+  @@map("products")
+}
+
+model Cart {
+  id        Int        @id @default(autoincrement())
+  userId    Int        @unique @map("user_id")
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("carts")
+}
+
+model CartItem {
+  id              Int           @id @default(autoincrement())
+  cartId          Int           @map("cart_id")
+  cart            Cart          @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  itemType        LineItemType  @map("item_type")
+  productId       Int?          @map("product_id")
+  product         Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  configKey       String?       @map("config_key")
+  nameSnapshot    String        @map("name_snapshot")
+  imagePath       String?       @map("image_path")
+  detailsSnapshot String?       @map("details_snapshot")
+  priceLabel      String        @map("price_label")
+  unitAmount      Int?          @map("unit_amount")
+  priceCurrency   CurrencyCode? @map("price_currency")
+  quantity        Int           @default(1)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id                   Int            @id @default(autoincrement())
+  userId               Int?           @map("user_id")
+  user                 User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status               OrderStatus    @default(PLACED)
+  paymentMethod        PaymentMethod? @map("payment_method")
+  paymentStatus        PaymentStatus  @default(PENDING) @map("payment_status")
+  shippingStatus       ShippingStatus @default(PENDING) @map("shipping_status")
+  paymentReference     String?        @map("payment_reference")
+  customerName         String         @map("customer_name")
+  customerEmail        String         @map("customer_email")
+  customerPhone        String?        @map("customer_phone")
+  shippingAddressLine1 String?        @map("shipping_address_line_1")
+  shippingAddressLine2 String?        @map("shipping_address_line_2")
+  shippingDistrict     String?        @map("shipping_district")
+  shippingProvince     String?        @map("shipping_province")
+  shippingPostalCode   String?        @map("shipping_postal_code")
+  shippingCountry      String?        @map("shipping_country")
+  shippingCarrier      String?        @map("shipping_carrier")
+  trackingNumber       String?        @map("tracking_number")
+  itemCount            Int            @default(0) @map("item_count")
+  totalSummary         String         @map("total_summary")
+  subtotalAmount       Int?           @map("subtotal_amount")
+  shippingAmount       Int            @default(0) @map("shipping_amount")
+  discountAmount       Int            @default(0) @map("discount_amount")
+  totalAmount          Int?           @map("total_amount")
+  totalCurrency        CurrencyCode?  @map("total_currency")
+  notes                String?
+  paidAt               DateTime?      @map("paid_at")
+  shippedAt            DateTime?      @map("shipped_at")
+  deliveredAt          DateTime?      @map("delivered_at")
+  cancelledAt          DateTime?      @map("cancelled_at")
+  items                OrderItem[]
+  review               CustomerReview?
+  paymentRecord        OrderPayment?
+  history              OrderStatusHistory[]
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  @@index([userId, createdAt])
+  @@index([paymentStatus])
+  @@index([shippingStatus])
+  @@index([trackingNumber])
+  @@map("orders")
+}
+
+model CustomerReview {
+  id                 Int      @id @default(autoincrement())
+  userId             Int      @map("user_id")
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId            Int      @unique @map("order_id")
+  order              Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  rating             Int
+  reviewText         String   @map("review_text")
+  authorNameSnapshot String   @map("author_name_snapshot")
+  locationLabel      String?  @map("location_label")
+  isPublished        Boolean  @default(true) @map("is_published")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([isPublished, createdAt])
+  @@index([userId, createdAt])
+  @@map("customer_reviews")
+}
+
+model OrderPayment {
+  id                Int      @id @default(autoincrement())
+  orderId           Int      @unique @map("order_id")
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  submittedByUserId Int?     @map("submitted_by_user_id")
+  submittedByUser   User?    @relation("SubmittedOrderPayments", fields: [submittedByUserId], references: [id], onDelete: SetNull)
+  paymentReference  String?  @map("payment_reference")
+  qrImageData       String?  @map("qr_image_data")
+  proofImageData    String?  @map("proof_image_data")
+  proofFileName     String?  @map("proof_file_name")
+  proofMimeType     String?  @map("proof_mime_type")
+  submittedAt       DateTime @default(now()) @map("submitted_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([submittedByUserId, submittedAt])
+  @@index([paymentReference])
+  @@map("order_payments")
+}
+
+model OrderStatusHistory {
+  id                   Int                   @id @default(autoincrement())
+  orderId              Int                   @map("order_id")
+  order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedByUserId      Int?                  @map("changed_by_user_id")
+  changedByUser        User?                 @relation("OrderStatusHistoryActor", fields: [changedByUserId], references: [id], onDelete: SetNull)
+  eventType            OrderHistoryEventType @map("event_type")
+  fromOrderStatus      OrderStatus?          @map("from_order_status")
+  toOrderStatus        OrderStatus?          @map("to_order_status")
+  fromPaymentStatus    PaymentStatus?        @map("from_payment_status")
+  toPaymentStatus      PaymentStatus?        @map("to_payment_status")
+  fromShippingStatus   ShippingStatus?       @map("from_shipping_status")
+  toShippingStatus     ShippingStatus?       @map("to_shipping_status")
+  shippingCarrier      String?               @map("shipping_carrier")
+  trackingNumber       String?               @map("tracking_number")
+  note                 String?
+  createdAt            DateTime              @default(now()) @map("created_at")
+
+  @@index([orderId, createdAt])
+  @@index([changedByUserId, createdAt])
+  @@map("order_status_history")
+}
+
+model OrderItem {
+  id              Int           @id @default(autoincrement())
+  orderId         Int           @map("order_id")
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  itemType        LineItemType  @map("item_type")
+  productId       Int?          @map("product_id")
+  product         Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  configKey       String?       @map("config_key")
+  nameSnapshot    String        @map("name_snapshot")
+  imagePath       String?       @map("image_path")
+  detailsSnapshot String?       @map("details_snapshot")
+  priceLabel      String        @map("price_label")
+  unitAmount      Int?          @map("unit_amount")
+  priceCurrency   CurrencyCode? @map("price_currency")
+  quantity        Int           @default(1)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}

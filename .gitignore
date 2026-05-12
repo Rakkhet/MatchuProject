@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+my-app/dist/
+
+# Environment variables (sensitive!)
+backend/.env
+.env
+.env.local
+.env.*.local
+
+# Prisma generated
+backend/generated/
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
